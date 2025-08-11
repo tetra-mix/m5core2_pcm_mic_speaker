@@ -6,6 +6,7 @@ static constexpr size_t CHUNK = 2048; // 1回の読み書きサンプル数（�
 static constexpr int REC_SEC = 5;
 static const char *PCM_PATH = "/mic.pcm";
 static uint32_t GLOBAL_SAMPLERATE = 16000;
+static constexpr float REC_GAIN = 3.0f; // 録音ゲイン（音声レベル向上）
 
 int16_t buf[CHUNK];
 
@@ -99,7 +100,7 @@ bool record_to_pcm(const char *path)
     {
       size_t n = (collected + CHUNK > target_samples) ? (target_samples - collected) : CHUNK;
       
-      // フィルタ適用
+      // フィルタとゲイン適用
       for (size_t i = 0; i < n; ++i) {
         int16_t sample = buf[i];
         
@@ -109,7 +110,20 @@ bool record_to_pcm(const char *path)
         // ローパスフィルタで高周波ノイズ除去
         sample = lpf_rec.process(sample);
         
-        buf[i] = sample;
+        // ゲイン適用（音声レベル向上）
+        float gained = (float)sample * REC_GAIN;
+        
+        // ソフトクリッピング（歪みを最小化）
+        if (gained > 32767.0f) {
+          gained = 32767.0f - (gained - 32767.0f) * 0.3f; // ソフトリミッター
+          if (gained > 32767.0f) gained = 32767.0f;
+        }
+        if (gained < -32768.0f) {
+          gained = -32768.0f - (gained + 32768.0f) * 0.3f; // ソフトリミッター
+          if (gained < -32768.0f) gained = -32768.0f;
+        }
+        
+        buf[i] = (int16_t)gained;
       }
       
       f.write((uint8_t *)buf, n * sizeof(int16_t));
