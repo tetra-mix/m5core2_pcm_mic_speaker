@@ -7,6 +7,7 @@ static constexpr int REC_SEC = 5;
 static const char *PCM_PATH = "/mic.pcm";
 static uint32_t GLOBAL_SAMPLERATE = 16000;
 static constexpr float REC_GAIN = 3.0f; // 録音ゲイン（音声レベル向上）
+static constexpr float PLAY_GAIN = 1.0f; // 再生ゲイン（スピーカー出力向上）
 
 int16_t buf[CHUNK];
 
@@ -186,7 +187,7 @@ bool play_pcm(const char *path)
     // r はバイト数。16bitモノラルとしてそのまま出す
     size_t samples = r / sizeof(int16_t);
     
-    // フィルタ適用
+    // フィルタとゲイン適用
     for (size_t i = 0; i < samples; ++i) {
       int16_t sample = buf[i];
       
@@ -196,7 +197,20 @@ bool play_pcm(const char *path)
       // ローパスフィルタで高周波ノイズ除去
       sample = lpf_play.process(sample);
       
-      buf[i] = sample;
+      // 再生ゲイン適用（スピーカー出力向上）
+      float gained = (float)sample * PLAY_GAIN;
+      
+      // ソフトクリッピング（スピーカー歪み防止）
+      if (gained > 32767.0f) {
+        gained = 32767.0f - (gained - 32767.0f) * 0.3f; // ソフトリミッター
+        if (gained > 32767.0f) gained = 32767.0f;
+      }
+      if (gained < -32768.0f) {
+        gained = -32768.0f - (gained + 32768.0f) * 0.3f; // ソフトリミッター
+        if (gained < -32768.0f) gained = -32768.0f;
+      }
+      
+      buf[i] = (int16_t)gained;
     }
     
     M5.Speaker.playRaw(buf, samples, sr, /*stereo=*/false, /*channels=*/1);
