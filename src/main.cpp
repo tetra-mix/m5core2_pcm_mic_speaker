@@ -2,7 +2,7 @@
 #include <SD.h>
 #include <WiFi.h>
 
-static constexpr size_t CHUNK = 1024; // 1回の読み書きサンプル数
+static constexpr size_t CHUNK = 2048; // 1回の読み書きサンプル数（安定性向上）
 static constexpr int REC_SEC = 5;
 static const char *PCM_PATH = "/mic.pcm";
 static uint32_t GLOBAL_SAMPLERATE = 16000;
@@ -31,7 +31,7 @@ public:
 class SimpleLowPassFilter {
 private:
   float prev_output = 0.0f;
-  float alpha = 0.685f; // カットオフ ≈ 2.4kHz @ 16kHz (音声帯域保持)
+  float alpha = 0.8f; // カットオフ ≈ 1.6kHz @ 16kHz (緩やかなローパス)
 public:
   int16_t process(int16_t input) {
     float fin = (float)input;
@@ -219,7 +219,12 @@ void setup()
     delay(100);
     uint32_t m = measureMicRate(GLOBAL_SAMPLERATE); // ここが ≈18432Hz になる個体あり
     M5.Mic.end();
-    GLOBAL_SAMPLERATE = m; // 実測値を採用
+    // 実測値が16000Hzに近い場合のみ採用（異常値を避ける）
+    if (m >= 15000 && m <= 17000) {
+      GLOBAL_SAMPLERATE = m;
+    } else {
+      GLOBAL_SAMPLERATE = 16000; // デフォルト値を維持
+    }
     Serial.printf("Measured mic rate ≈ %u Hz\n", GLOBAL_SAMPLERATE);
     M5.Display.setCursor(10, 160);
     M5.Display.printf("Mic rate: %u Hz", GLOBAL_SAMPLERATE);
